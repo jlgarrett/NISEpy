@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
 """
+load_and_prep() loads an .ibw image file stored according to the traditions of 
+Asylum research and stores it as a dictionary (because that is what the 'igor' 
+package does by default)
+
+to access metadata about the file, x['cleannote']
+to list the data in the file, x['labels']
+to extract a particular image, get_image(loadedibw, nameOfImage)
+
 Created on Mon Jan 22 17:00:33 2018
 
 @author: joe
