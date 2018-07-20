@@ -164,23 +164,3 @@ def spheremap(radius, n_pixels, dx, center = 0, closest = 0):
     sphere = - sphere + radius + closest
     return sphere
 
-def simplesphere(R, x0, y0, z0):
-    return lambda x,y: np.sqrt(R**2 - (x-x0)**2 - (y-y0)**2)-z0
-
-def quickspherefit( sphereImage, dx=0 ):
-  if dx == 0:
-    sphere = sphereImage.get_image( ibw, 'ZSensorRetrace')#will raise an attribute error if not using an ibw
-    dx = float(sphereImage['cleannote']['dx'])
-  else:
-    sphere = sphereImage
-    
-  expectedR = 4e-5
-  half_side = round(sphere.shape/2*dx)
-  guess = [expectedR,half_side[0], half_side[1], half_side[0]+expectedR]
-  
-  errorfunction = lambda p: np.ravel(\
-    simplesphere(*p)(*[dx*i for i in np.indices(sphere.shape)])-sphere)
-  
-  p = optimize.least_squares(errorfunction, guess)
-  
-  return p

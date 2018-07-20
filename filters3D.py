@@ -8,6 +8,11 @@ Created on Tue Jan 23 10:07:52 2018
 import numpy as np
 import scipy
 from scipy.integrate import dblquad
+import scipy.interpolate
+import time
+import force3D as f3
+from scipy import signal
+import mpmath as mp
 
 '''This file is for calculating the patch filters to process an image. Both
 the actual processing of KPFM data, and the calculation of the force from the 
@@ -15,11 +20,18 @@ images can be found in 'force3D.py'. The function 'completefiltering' creates
 the filter, for a given number of pixes, pixel size, heights, when the function
 is specified. It acts using the functions preceding it.'''
 
+def interpolate_from_pix( pix ):
+    pix2 = [i for i in pix.keys() if not isinstance(i, str)]
+    hs = pix['separation']
+    interpolations = {j:scipy.interpolate.interp1d(np.log(hs), np.log(pix[j]), kind = 'linear') for j in pix2}
+    #nterpolations = {j:scipy.interpolate.interp1d(hs, pix[j], kind = 'cubic') for j in pix2}
+    return interpolations    
 
 def patchIntegrand( label = ""):
     '''Calculates the radial integral of the filter to apply to the patch 
-    potential image for a particular force setting. x has been normalized by 
-    the radius. 
+    potential image for a particular force setting. x is k normalized by 
+    the radius. dor is d normalized by the radius. For some reason, all the
+    'pi's are gone.
     
     The label can be:
     
@@ -30,34 +42,104 @@ def patchIntegrand( label = ""):
      
     #Return a function based on the input 
     if label == 'fs':
-        def intfunc(dor, x):
-            return dor**4 * x**3 / (np.sinh(x*dor))**2 * scipy.special.j0(x)
+        def intfunc(x, dor):
+            return dor**4 * np.float128(x**3 / (np.sinh(x*dor))**2) * np.float128(scipy.special.j0(x))
         return intfunc
     elif label == 'fo': 
-        def intfunc(dor, x):
+        def intfunc(x, dor):
             return dor**4 * x**3 / (np.sinh(x*dor))**2 * np.cosh(x*dor) \
             * scipy.special.j0(x)
         return intfunc
     elif label == 'fds':
-        def intfunc(dor, x):
+        def intfunc(x, dor):
             return dor**5 * x**4 / (np.sinh(x*dor))**3 * np.cosh(x*dor) \
             * scipy.special.j0(x)
         return intfunc
     elif label == 'fdo':
-        def intfunc(dor, x):
+        def intfunc(x, dor):
             return dor**5 * x**4 / (np.sinh(x*dor))**3 * (np.cosh(x*dor)**2 
             + 1) * scipy.special.j0(x)
         return intfunc
     else:
         return 0
+      
+def mpPatchIntegrand( label = ""):
+    '''Calculates the radial integral of the filter to apply to the patch 
+    potential image for a particular force setting. x is k normalized by 
+    the radius. dor is d normalized by the radius. For some reason, all the
+    'pi's are gone.
+    
+    The label can be:
+    
+    'fs' for force from same surface
+    'fo' for force from opposite surfaces
+    'fds' for force derivative from same surface
+    'fdo' for force derivative from other surface
+    
+    unlike the original PatchIntegrand function, these are funcion of functions'''
+     
+    #Return a function based on the input 
+    if label == 'fs':
+        def intfunc(dor):
+          def interfunc(x):
+            return dor**4 * x**3 / mp.sinh(x*dor)**2 * mp.j0(x)
+          return interfunc
+        return intfunc
+    elif label == 'fo': 
+        def intfunc(dor):
+          def interfunc(x):
+            return dor**4 * x**3 / (mp.sinh(x*dor))**2 * mp.cosh(x*dor) \
+            * mp.j0(x)
+          return interfunc
+        return intfunc
+    elif label == 'fds':
+      def intfunc(dor):
+        def interfunc(x):
+            return dor**5 * x**4 / (mp.sinh(x*dor))**3 * mp.cosh(x*dor) \
+            * mp.j0(x)
+        return interfunc
+      return intfunc
+    elif label == 'fdo':
+      def intfunc(dor):
+        def interfunc(x):
+            return dor**5 * x**4 / (mp.sinh(x*dor))**3 * (mp.cosh(x*dor)**2 
+            + 1) * mp.j0(x)
+        return interfunc
+      return intfunc
+    else:
+        return 0
 
+def mpIntegralfunc( dor, force_integ):
+    '''The mpmath package is used to arrive to integrate to lower dor than 
+    possible with scipy.quad'''
+   
+    if dor > 100:
+        starttime = time.time()
+        inte = mp.quad(force_integ(dor),[0,mp.inf])
+        print('the duration for dor = {0} is: {1}'.format(dor, time.time()-starttime))
+        return float(inte)
+    elif dor < 0.05:
+        mp.mp.prec = 250
+    elif dor < 0.1:
+        mp.mp.prec = 100
+    #else:
+        #mp.mp.prec = 5
+    
+    j0zero = lambda n: mp.findroot(mp.j0, mp.pi*(n-0.25))
+    
+    starttime = time.time()
+    inte = mp.quadosc(force_integ(dor),[0,mp.inf], zeros = j0zero)
+    print('the duration for dor = {0} is: {1}'.format(dor, time.time()-starttime))
+    return float(inte)
+    
+      
 def integrate_rad(rfunc, minpoint, maxpoint):
         '''Integrates the function rfunc from minpoint to maxpoint (tuples).
         Includes code to prevent integral from going wild at small values'''
         p1 = minpoint
         p2 = maxpoint
         #If we let the function get too small, the integral never converges
-        if rfunc( np.sqrt(p1[0]**2+p2[0]**2) ) < 1e-1: 
+        if abs(rfunc( np.sqrt(p1[0]**2+p2[0]**2) )) < 1e-12: 
             return 0
         else:
             return dblquad(lambda x,y: rfunc( np.sqrt(x**2+y**2)), p1[0], p2[0],
@@ -90,22 +172,26 @@ def define_filter( rfunc , side_n , spacing ):
         
         return rfilter
 
-def internal_integral( dor , force_inte = 0):
+def internal_integral( dor , force_inte = 0, intlimit = 0):
     '''Integrates over the function force_inte. Assumes a force of the type
     generated by patchIntegrand()'''
     if force_inte == 0:
         force_inte = patchIntegrand('fs')
-    return scipy.integrate.quad(lambda x: force_inte(x,dor),0,100/dor, 
-                                epsabs = 1e-12, limit = 2000)[0]
+    if intlimit == 0:
+      intlimit = 100/dor
+    return scipy.integrate.quad(lambda x: force_inte(x,np.float128(dor)),0,intlimit, 
+                                epsrel = 1e-12, epsabs = 1e-12, limit = 5000)[0]
 
-def ii_array( dors , force_integ = 0):
+def ii_array( dors , force_integ = 0, integral_func = 0):
     '''Creates an array of integrals of a function for many separations. 
     Assumes a function of the form of patchIntegrand()'''
     if force_integ == 0:
         force_integ = patchIntegrand('fs')
     output = dors
+    
+    
     for i in range(len(dors)):
-        output[i] = internal_integral( dors[i] , force_integ)
+        output[i] = integral_func( dors[i] , force_integ)
     
     return output
 
@@ -117,14 +203,23 @@ class InterpRes:
     start -- is the smallest x value
     end -- is the largest x value to be interpolated
     func_2_interpolate -- is the function to be interpolated.'''
-    def __init__(self, start=0.09, end=10**5, func_2_interpolate=0):
+    def __init__(self, start=0.09, end=10**5,
+                 func_2_interpolate=0, integral_func = 0, xs = 0, ys = 0):
         #print(start,end)
         if func_2_interpolate == 0:
             func_2_interpolate = patchIntegrand('fs')
-        self.startpoint = start
-        self.endpoint = end
-        lnx = np.linspace(np.log(start), np.log(end), num=100, endpoint=True)
-        ys = ii_array(np.exp(lnx), func_2_interpolate)
+            
+        if integral_func == 0:
+            integral_func = internal_integral
+            
+        if xs == 0 | ys == 0:
+            self.startpoint = start
+            self.endpoint = end
+            lnx = np.linspace(np.log(start), np.log(end), num=200, endpoint=True)
+            ys = ii_array(np.exp(lnx), func_2_interpolate, integral_func = integral_func)
+        else:
+            lnx = np.log(xs)
+        
         if min(ys) > 0:
             lny = np.log(ys)
             self.ispos = True
@@ -225,3 +320,20 @@ def expand_filter( filt ):
     exp_filt[halfside:,:halfside] = exp_filt[halfside:,:halfside:-1]
     exp_filt[:halfside] = exp_filt[:halfside:-1]
     return exp_filt
+  
+def initialize_filtered_images( h_vals, raw_image, filter_int):
+    '''Converts a cleaned KPFM voltages image into the image charge voltage at a certain separations.
+    
+    h_vals is list of separations.
+    raw_image should be a np. array.
+    filter_int is a dictionary describing a filter.
+    the function returns a dictionary of the voltage from the image charges as several heights, 
+    as a dictionary with the heights as the keys.'''
+    filtered_images = {}
+    starttime = time.time()
+    for i in h_vals:
+        print(time.time()-starttime)
+        loc_filt = f3.make_filter(i,filter_int)
+        filtered_images[i] = signal.convolve2d(raw_image, loc_filt, boundary='symm', mode='same') 
+        
+    return filtered_images
