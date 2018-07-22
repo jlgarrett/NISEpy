@@ -342,3 +342,24 @@ def initialize_filtered_images( h_vals, raw_image, filter_int):
         filtered_images[i] = signal.convolve2d(raw_image, loc_filt, boundary='symm', mode='same') 
         
     return filtered_images
+
+def KPFMimagefilter( raw_image, loc_filter):
+    '''Converts a cleaned KPFM voltages image into the image charge voltage at a certain separations.
+    
+    raw_image should be a np.array.
+    filter_int is a np.array also.
+    the function returns a dictionary of the voltage from the image charges as several heights, 
+    as a dictionary with the heights as the keys.'''
+    med = np.median(raw_image)
+    #starttime = time.time()
+    #print(time.time()-starttime)
+    filtered_image = signal.convolve2d(raw_image, loc_filt, boundary='fill', fillvalue = med, mode='same') 
+        
+    return filtered_image
+  
+def allfilteredImages(raw_image, filters, h_values):
+    allfiltered = {}
+    for x, i in enumerate(h_values):
+        allfiltered[i] = KPFMimagefilter(raw_image, filters[x])
+        
+    return allfiltered
