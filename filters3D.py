@@ -212,13 +212,18 @@ class InterpRes:
         if integral_func == 0:
             integral_func = internal_integral
             
-        if xs == 0 | ys == 0:
-            self.startpoint = start
-            self.endpoint = end
-            lnx = np.linspace(np.log(start), np.log(end), num=200, endpoint=True)
-            ys = ii_array(np.exp(lnx), func_2_interpolate, integral_func = integral_func)
-        else:
+        try:
+            if xs == 0 | ys == 0:
+                self.startpoint = start
+                self.endpoint = end
+                lnx = np.linspace(np.log(start), np.log(end), num=200, endpoint=True)
+                ys = ii_array(np.exp(lnx), func_2_interpolate, integral_func = integral_func)
+            else:
+                lnx = np.log(xs)
+        except TypeError:
             lnx = np.log(xs)
+            self.startpoint = xs.min()
+            self.endpoint = xs.max()
         
         if min(ys) > 0:
             lny = np.log(ys)
