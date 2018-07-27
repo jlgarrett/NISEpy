@@ -56,8 +56,8 @@ def make_calc_filters(filter_raw):
     for hx, h in enumerate(filter_raw['separation']):
         hfilter = np.array([[filter_raw[racs((j,i))][hx] 
                  for j in range(-nside, nside+1)] for i in range(-nside, nside+1)])
-        print(np.sum(hfilter))
-        hfilter = hfilter/np.sum(hfilter)
+        print(1,np.sum(hfilter))
+        #hfilter = hfilter/np.sum(hfilter)
         hfilters[h] = hfilter
     #for i, h in enumerate(filter_raw['separation']):
     #  hfilter[:,:,i] = hfilter[:,:,i] / np.sum(hfilter[:,:,i])

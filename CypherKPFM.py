@@ -326,7 +326,7 @@ def clean_kpfms( ibw, setpoint = 0, tolerance = 0, consistencyTolerance = 0):
     return KPFM_best
     
     
-def flatten( image, axis = 0, mask = '0'):
+def flatten( image, axis = 0, mask = '0', order = 0):
     '''Flattens the individual lines of an image.
 
     Right now it supports only 0th order flattening, which is most common
@@ -348,7 +348,9 @@ def flatten( image, axis = 0, mask = '0'):
     #we create another value to act on    
 
     for i in range(image.shape[0]):
-        flattened_image[:,i]=flattened_image[:,i]-np.nanmean(flattening[:,i])
+        pfit = np.polyfit(np.indices(flattened_image[:,i].shape).flatten(),flattened_image[:,i], order)
+        p = np.poly1d(pfit)
+        flattened_image[:,i]=flattened_image[:,i]-p(np.indices(flattened_image[:,i].shape))
         
     #transpose back    
     if axis == 1:

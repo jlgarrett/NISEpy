@@ -82,27 +82,27 @@ def mpPatchIntegrand( label = ""):
     if label == 'fs':
         def intfunc(dor):
           def interfunc(x):
-            return dor**4 * x**3 / mp.sinh(x*dor)**2 * mp.j0(x)
+            return scipy.constants.pi/2*dor**4 * x**3 / mp.sinh(x*dor)**2 * mp.j0(x)
           return interfunc
         return intfunc
     elif label == 'fo': 
         def intfunc(dor):
           def interfunc(x):
-            return dor**4 * x**3 / (mp.sinh(x*dor))**2 * mp.cosh(x*dor) \
+            return scipy.constants.pi/2*dor**4 * x**3 / (mp.sinh(x*dor))**2 * mp.cosh(x*dor) \
             * mp.j0(x)
           return interfunc
         return intfunc
     elif label == 'fds':
       def intfunc(dor):
         def interfunc(x):
-            return dor**5 * x**4 / (mp.sinh(x*dor))**3 * mp.cosh(x*dor) \
+            return scipy.constants.pi/2*dor**5 * x**4 / (mp.sinh(x*dor))**3 * mp.cosh(x*dor) \
             * mp.j0(x)
         return interfunc
       return intfunc
     elif label == 'fdo':
       def intfunc(dor):
         def interfunc(x):
-            return dor**5 * x**4 / (mp.sinh(x*dor))**3 * (mp.cosh(x*dor)**2 
+            return scipy.constants.pi/4*dor**5 * x**4 / (mp.sinh(x*dor))**3 * (mp.cosh(x*dor)**2 
             + 1) * mp.j0(x)
         return interfunc
       return intfunc
@@ -351,10 +351,12 @@ def KPFMimagefilter( raw_image, loc_filter):
     the function returns a dictionary of the voltage from the image charges as several heights, 
     as a dictionary with the heights as the keys.'''
     med = np.median(raw_image)
+    total_lf = np.sum(loc_filter)
+    resid = 1 - total_lf
     #starttime = time.time()
     #print(time.time()-starttime)
-    filtered_image = signal.convolve2d(raw_image, loc_filt, boundary='fill', fillvalue = med, mode='same') 
-        
+    filtered_image = signal.convolve2d(raw_image, loc_filter, boundary='fill', fillvalue = med, mode='same') 
+    filtered_image = filtered_image + med*resid*np.ones_like(filtered_image)    
     return filtered_image
   
 def allfilteredImages(raw_image, filters, h_values):
@@ -363,3 +365,15 @@ def allfilteredImages(raw_image, filters, h_values):
         allfiltered[i] = KPFMimagefilter(raw_image, filters[x])
         
     return allfiltered
+  
+def thePhiller( submatrix ):
+    a = len(submatrix)-1
+    nside = 2*a + 1
+    print(a,nside)
+    array2fill = np.zeros((nside, nside))
+    array2fill[a:,a:] = submatrix[:,:]
+    array2fill[0:a,0:a] = submatrix[a:0:-1,a:0:-1]
+    array2fill[0:a,a:] = submatrix[a:0:-1,:]
+    array2fill[a:,0:a] = submatrix[:,a:0:-1]
+    
+    return array2fill
