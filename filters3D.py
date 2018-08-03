@@ -171,6 +171,8 @@ def define_filter( rfunc , side_n , spacing ):
                 rfilter[i][j] = inte
         
         return rfilter
+      
+    
 
 def internal_integral( dor , force_inte = 0, intlimit = 0):
     '''Integrates over the function force_inte. Assumes a force of the type

@@ -6,6 +6,8 @@ Created on Tue Jan 23 10:08:32 2018
 """
 import numpy as np
 import tables
+from scipy import constants
+import patchpotentials as pt
 
 
 def expand_filter( filt ):
@@ -93,3 +95,290 @@ def initialize_filtered_images( h_vals, raw_image, filter_int, savingfile = 0):
           #savingfile(i) = filtered_images[i]
     
     return filtered_images
+  
+def make_grid( center, lside, nside):
+    '''Returns a set of points as a list of tuples, centered 
+    with side length lside and nside points'''
+    dist_btw_pts = lside//nside
+    while lside % nside > 0: #we include this just incase stuff doesn't quite line up
+        lside = lside + 1
+    minx, miny = tuple([center[i]-dist_btw_pts*(nside//2) for i in range(2)])
+    points = [ (minx+i*dist_btw_pts, miny+j*dist_btw_pts) for i in range(nside) for j in range(nside)]
+    return points
+  
+def V0_for_df( v1, v1_tilde, sphere_heights, dx, v2 = 0 , v2_hat = 0, R = 4e-5, ext_voltage = 0 ):
+    dx = float(dx)
+    
+    voltage2min = v2 + v2_hat - (v1 + v1_tilde)
+    v0_unnorm, v0_normalizer = minimizing_voltage_fd_image( voltage2min, sphere_heights, dx, inner = True)
+    d = sphere_heights.min()
+    
+    
+    v0 = (v0_unnorm-ext_voltage*(spherePFAdF(d,R) - v0_normalizer))/spherePFAdF(d, R)
+    
+    return v0
+
+def V0_for_force( v1, v1_tilde, sphere_heights, dx, v2 = 0 , v2_hat = 0, R = 4e-5, ext_voltage = 0 ):
+    '''This is like the minimizing_voltage_PFA function, except that it takes the actual maps rather
+    than dictionaries'''
+    dx = float(dx)
+    
+    voltage2min = v2 + v2_hat - (v1 + v1_tilde)
+    v0_unnorm, v0_normalizer = minimizing_voltage_force_image( voltage2min, sphere_heights, dx, inner = True)
+    d = sphere_heights.min()
+    
+    #should probably include the full PFA solution here
+    v0 = (v0_unnorm-ext_voltage*(spherePFA(d,R)- v0_normalizer))/spherePFA(d,R)
+    
+    return v0
+  
+def spherePFA( d, R ):
+    #I've set it up to use the full rather than the leading-order PFA in order to better incorporate the image
+    #The full PFA actually is no better at predicting the exact 
+    PFA = 2*np.pi*(R/d-np.log(R/d +1))
+    return PFA
+  
+def spherePFAdF( d, R ):
+    #I've set it up to use the full rather than the leading-order PFA in order to better incorporate the image
+    #The full PFA actually is no better at predicting the exact 
+    PFA = 2*np.pi*R/d**2*(1-1/(R/d +1))
+    return PFA
+  
+def minimizing_voltage_fd_image( voltage_map, heights , dx,  inner = False):
+    '''calculates the minimizing voltage'''
+    
+    v0_unnorm = 2*0.5*np.sum(voltage_map/heights**3)*dx**2
+    v0_normalizer = 2*np.sum(1/heights**3)*dx**2
+    #print(v0_unnorm,v0_normalizer)
+    
+    if inner:
+        return v0_unnorm, v0_normalizer
+    else:
+        return v0_unnorm/v0_normalizer
+
+def minimizing_voltage_force_image( voltage_map, heights , dx,  inner = False):
+    '''calculates the minimizing voltage'''
+    
+    v0_unnorm = 0.5*np.sum(voltage_map/heights**2)*dx**2
+    v0_normalizer = np.sum(1/heights**2)*dx**2
+    #print(v0_unnorm,v0_normalizer)
+    
+    if inner:
+        return v0_unnorm, v0_normalizer
+    else:
+        return v0_unnorm/v0_normalizer
+
+def minimizing_voltage_PFA( v1, v1_tilde_d, heights, dx,v2=0 , v2_hat_d=0, R = 4e-5, ext_voltage = 0 ):
+    if v2 == 0:
+        v2 = np.zeros(v1.shape)
+        v2_hat_d = {0:np.zeros(v1.shape)}
+        
+    v1tilde = patches_on_sphere2(heights, v1_tilde_d)
+    v2_hat = patches_on_sphere2(heights, v2_hat_d)
+    
+    voltage2min= v2+v2_hat-(v1+v1tilde)
+    v0_unnorm, v0_normalizer = minimizing_voltage_force_image( voltage2min, heights, dx, inner = True)
+    d = heights.min()
+    #print(d,v0_unnorm,v0_normalizer,R,ext_voltage)
+    dx = float(dx)
+    
+    v0 = (v0_unnorm-ext_voltage*(2*np.pi*R/d - v0_normalizer))/(2*np.pi*R/d)
+    #print(v0)
+    
+    return v0
+  
+def force_from_heights( sphere_image, dx, v1, v1_tilde, v1_hat, v2, v2_tilde, v2_hat,\
+                      ext_voltage = 0, app_voltage = 0, radius = 4e-5):
+    
+    d = np.amin(sphere_image)
+    area2sum = 1/sphere_image**2*dx**2
+    force2sum = constants.epsilon_0/2*((v1+app_voltage)*(v1_tilde+app_voltage)- \
+                                       (v1+app_voltage)*v2_hat - v2*(v1_hat+app_voltage) + v2*v2_tilde)*area2sum
+    total_force = np.sum(force2sum) + \
+        constants.epsilon_0/2*(ext_voltage+app_voltage)**2*(spherePFA( d, radius ) - np.sum(area2sum))
+    
+    return total_force
+  
+def force_expanded( sphere_image, dx, v1, v1_tilde, v1_hat, v2, v2_tilde, v2_hat,\
+                      ext_voltage = 0, app_voltage = 0, radius = 4e-5):
+    
+    d = np.amin(sphere_image)
+    area2sum = 1/sphere_image**2*dx**2
+    force2sum = constants.epsilon_0/2*np.sum(area2sum)*np.array([np.sum((v1+app_voltage)*(v1_tilde+app_voltage)),
+                                                np.sum(-(v1+app_voltage)*v2_hat),np.sum( - v2*(v1_hat+app_voltage)), np.sum(v2*v2_tilde)])
+    residual_force = constants.epsilon_0/2*(ext_voltage+app_voltage)**2*(spherePFA( d, radius ) - np.sum(area2sum))
+    
+    return force2sum, residual_force
+  
+def df_from_heights(sphere_image, dx, v1, v1_tilde, v1_hat, v2, v2_tilde, v2_hat,\
+                      ext_voltage = 0, app_voltage = 0, radius = 4e-5):
+    
+    d = np.amin(sphere_image)
+    area2sum = 1/sphere_image**3*dx**2
+    force2sum = constants.epsilon_0*((v1+app_voltage)*(v1_tilde+app_voltage)- \
+                                       (v1+app_voltage)*v2_hat - v2*(v1_hat+app_voltage) + v2*v2_tilde)*area2sum
+    total_force = np.sum(force2sum) + \
+        constants.epsilon_0/2*(ext_voltage+app_voltage)**2*(spherePFAdF - np.sum(area2sum))
+    
+    return total_force
+  
+def quickforcesave(fileName, pixels, dataList, description = '' ):
+    with tb.open_file(fileName, mode = 'w', title = description) as h5file:
+        pix = np.array([[i[0],i[1]] for i in pixels])
+        parray = h5file.create_array('/', 'center_pix', pix, 'the pixels on which sphere is centered')
+        parray.attrs.plotting_note = 'remember x and y coordinates are switched when plotting on an image'
+        
+        dgroup = h5file.create_group(h5file.root, 'calcData', 'numerical data calculated from measurements at each separation')
+        
+        for i in dataList:
+            tablestyle = {}
+            for j in dataList[i]:
+                if j == 'Title':
+                    Title = dataList[i][j]
+                    continue
+
+                tablestyle[j] = tb.FloatCol()
+                
+            newtable = h5file.create_table(dgroup, i, tablestyle, title = Title )
+                
+            aRow = newtable.row            
+            for m, j in enumerate(dataList[i]['separations']):
+                for k in tablestyle:
+                    #print(j)
+                    aRow[k] = dataList[i][k][m]
+                aRow.append()
+            newtable.flush()
+    return 0
+  
+def calcForceData( sphere, plate, grid, seps):
+    all_data = {}
+    if not sphere.KPFM.shape == plate.KPFM.shape:
+        print('The sphere and plate images (currently) need to be the same size')
+        return -1
+    if check(sphere, plate):
+        all_forces = {}
+        all_v0s = {}
+        for u,i in enumerate(grid):
+            for w, j in enumerate(grid):
+                labelstr  = 's'+str(u).zfill(2) + 'p' + str(w).zfill(2)
+                labels[L*u+w] = labelstr
+                
+                (toptopo, bottopo, wholesphere), shift = shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
+                vPkpfm = pt.shiftFill(shift, plate.KPFM, bottom = True)
+                vSkpfm = pt.shiftFill(shift, sphere.KPFM)
+        
+                v0s = np.zeros(10)
+                forces = np.zeros(10)
+                for v, h in enumerate(seps):
+                    vSs1 = pt.patches_on_sphere2(toptopo + h, sphere.fs)
+                    vSo1 = pt.patches_on_sphere2(toptopo + h, sphere.fo)
+                    vPs1 = pt.patches_on_sphere2(bottopo + h, plate.fs)
+                    vPo1 = pt.patches_on_sphere2(bottopo + h, plate.fo)
+                    vPs = pt.shiftFill( shift, vPs1, bottom = True)
+                    vPo = pt.shiftFill( shift, vPo1, bottom = True)
+                    vSs = pt.shiftFill( shift, vSs1)
+                    vSo = pt.shiftFill( shift, vSo1)
+                    v0 = V0_for_force(vSkpfm, vSs, wholesphere+h, dx=sphere.dx, v2 = vPkpfm, v2_hat = vPo, R = sphere.R)
+                    force = force_from_heights( wholesphere+h, sphere.dx, vSkpfm, vSs, vSo, vPkpfm, vPs, vPo,
+                      ext_voltage = 0, app_voltage = v0, radius = sphere.R)
+                    v0s[v] = v0
+                    forces[v] = force
+            
+                all_forces[labelstr] = forces
+                all_v0s[labelstr] = v0s
+    all_forces['Title'] = 'The forces calculated form the sphere ' + sphere.name
+    all_v0s['Title'] = 'The force-minimizing voltages calculated form the sphere ' + sphere.name
+    all_data['f'] = all_forces
+    all_data['v0f'] = all_v0s
+        
+    if check(sphere, plate, f = 'fd'):
+        all_df = {}
+        all_v0df = {}
+        for u,i in enumerate(grid):
+            for w, j in enumerate(grid):
+                labelstr  = 's'+str(u).zfill(2) + 'p' + str(w).zfill(2)
+                labels[L*u+w] = labelstr
+                
+                (toptopo, bottopo, wholesphere), shift = shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
+                vPkpfm = pt.shiftFill(shift, plate.KPFM, bottom = True)
+                vSkpfm = pt.shiftFill(shift, sphere.KPFM)
+        
+                v0s = np.zeros(10)
+                forces = np.zeros(10)
+                for v, h in enumerate(seps):
+                    vSs1 = pt.patches_on_sphere2(toptopo + h, sphere.fds)
+                    vSo1 = pt.patches_on_sphere2(toptopo + h, sphere.fdo)
+                    vPs1 = pt.patches_on_sphere2(bottopo + h, plate.fds)
+                    vPo1 = pt.patches_on_sphere2(bottopo + h, plate.fdo)
+                    vPs = pt.shiftFill( shift, vPs1, bottom = True)
+                    vPo = pt.shiftFill( shift, vPo1, bottom = True)
+                    vSs = pt.shiftFill( shift, vSs1)
+                    vSo = pt.shiftFill( shift, vSo1)
+                    v0 = V0_for_df(vSkpfm, vSs, wholesphere+h, dx=sphere.dx, v2 = vPkpfm, v2_hat = vPo, R = sphere.R)
+                    force = df_from_heights( wholesphere+h, sphere.dx, vSkpfm, vSs, vSo, vPkpfm, vPs, vPo,
+                      ext_voltage = 0, app_voltage = v0, radius = sphere.R)
+                    v0s[v] = v0
+                    forces[v] = force
+            
+                all_df[labelstr] = forces
+                all_v0df[labelstr] = v0s
+    all_df['Title'] = 'The force derivatives calculated form the sphere ' + sphere.name
+    all_v0df['Title'] = 'The force derivative-minimizing voltages calculated form the sphere ' + sphere.name
+    all_data['df'] = all_df
+    all_data['v0f'] = all_v0df
+        
+    return all_data
+    
+def check(sphere, plate, f = 'f'):
+    if f == 'f':
+        return not ((sphere.fs == 0) | (sphere.fo == 0) | (plate.fo == 0) | (plate.fs == 0))
+    else:
+        return not ((sphere.fds == 0) | (sphere.fdo == 0) | (plate.fdo == 0) | (plate.fds == 0))
+    
+def quick_f_V0(sph, pl, center, shift):
+    hmap = 1e-7
+    vSs = pt.patches_on_sphere2(hmap, sph.fs)
+    vPo = pt.patches_on_sphere2(hmap, pl.fo)
+    v0 = V0_for_force(sph.KPFM, vSs, hmap, sph.dx, v2 = pl.KPFM, v2_hat = vPo, R = sph.R)
+    return v0
+
+def quick_force(sph, pl, hmap):
+    vSs = pt.patches_on_sphere2(hmap, sph.fs)
+    vSo = pt.patches_on_sphere2(hmap, sph.fo)
+    vPs = pt.patches_on_sphere2(hmap, pl.fs)
+    vPo = pt.patches_on_sphere2(hmap, pl.fo)
+    force = force_from_heights( hmap, sph.dx, sph.KPFM, vSs, vSo, pl.KPFM, vPs, vPo, radius = sph.R)
+    return force
+  
+class surface:
+    def __init__( self, KPFM, fs = 0 , fo = 0, fds = 0, fdo = 0):
+        self.KPFM = KPFM
+        self.fs = fs
+        self.fo = fo
+        self.fds = fds
+        self.fdo = fdo
+
+class sphere(surface):
+    def __init__(self, KPFM, fs = 0 , fo = 0, fds = 0, fdo = 0, R = 0, dx = 0, name = ''):
+        super(sphere, self).__init__(KPFM, fs, fo, fds, fdo)
+        self.R = R
+        self.dx = dx
+        self.name = name
+        
+def to_dictionaries( h5):
+  with tb.open_file(h5, mode = 'r') as h5fil:
+    separations = h5fil.root.separations.read()
+    try:
+        mo = h5fil.root.fo.read()
+        ms = h5fil.root.fs.read()
+    except Exception:
+        mo = h5fil.root.fdo.read()
+        ms = h5fil.root.fds.read()
+        
+    o = {}    
+    s = {}    
+    for i, x in enumerate(separations):
+        o[x] = mo[:,:,i]
+        s[x] = ms[:,:,i]
+   
+    return s, o  

@@ -123,7 +123,7 @@ def minimizing_voltage_Force_PFA( voltage_map, heights, dx, R = 4e-5, ext_voltag
     
 def centered_spheremap(radius, n_pixels, closest, dx):
     center = (n_pixels//2, n_pixels//2)
-    sphere = np.array([[np.sqrt(radius**2 - (dx*(i-center[0]))**2 - (dx*(j-center[1]))**2) for i in range(n_pixels)] for 
+    sphere = np.array([[np.sqrt(radius**2 - (dx*(i-center[1]))**2 - (dx*(j-center[0]))**2) for i in range(n_pixels)] for 
                                 j in range(n_pixels)])
     sphere = - sphere + radius + closest
     return sphere
@@ -156,11 +156,91 @@ def patches_on_sphere2(sphere, filtered_patch_dict):
 def spheremap(radius, n_pixels, dx, center = 0, closest = 0):
     '''This function creates a map of the heights of a sphere above a surface'''
     
+    
+    
     if center == 0:
         center = (n_pixels//2, n_pixels//2)
     # print(center)
     dx = float(dx)
-    sphere = np.array([[np.sqrt(radius**2 - (dx*(i-center[0]))**2 - (dx*(j-center[1]))**2) for i in range(n_pixels)] for j in range(n_pixels)])
+    try:
+        sphere = np.array([[np.sqrt(radius**2 - (dx*(i-center[0]))**2 - (dx*(j-center[1]))**2) for j in range(n_pixels)] for i in range(n_pixels)])
+    except TypeError:
+        sphere = np.array([[np.sqrt(radius**2 - (dx*(i-center[0]))**2 - (dx*(j-center[1]))**2) for j in range(n_pixels[1])] for i in range(n_pixels[0])])
+      
     sphere = - sphere + radius + closest
     return sphere
 
+def shifted_sphere(orig_pix, shift, orig_center,  dx, radius = 4e-5):
+    try:
+        newx,newy = orig_pix[0]+abs(shift[0]), orig_pix[1]+abs(shift[1])
+    except TypeError:
+        newx,newy = orig_pix+abs(shift[0]), orig_pix+abs(shift[1])
+    
+    new_center = list(orig_center)
+    for i in range(2):    
+        if shift[i] < 0:
+            #print(i)
+            new_center[i] = new_center[i] - shift[i]
+            
+    #print(new_center, newx, newy)
+            
+    #print('radius is type {}'.format(type(radius)))
+    #print('newx is type {}'.format(type(newx)))
+    #print('dx is type {}'.format(type(dx)))
+    #print('center is type {}'.format(type(new_center)))
+    sphere = spheremap(radius, (newx,newy), dx=dx, center = new_center)
+    
+    return sphere
+
+def subselect(orig_shape, shift, image, bottom = False):
+    if bottom:
+        shift = (-shift[0],-shift[1])
+    
+    start_x, start_y = 0,0
+    if shift[0] > 0:
+        start_x = shift[0]
+    if shift[1] > 0:
+        start_y = shift[1]
+    
+    try:
+        return image[start_x:start_x+orig_shape[0],start_y:start_y+orig_shape[1]]
+    except TypeError:
+        return image[start_x:start_x+orig_shape,start_y:start_y+orig_shape]
+      
+def shiftFill(shift, image, bottom = False, fill = -1):
+    shiftIm = np.zeros((image.shape[0]+abs(shift[0]),image.shape[1]+abs(shift[1])))
+    if fill == -1:
+        shiftIm[:,:] = np.median(image)
+    else:
+        shiftIm[:,:] = fill
+    
+    if bottom:
+        shift = (-shift[0],-shift[1])
+    
+    start_x, start_y = 0,0
+    if shift[0] > 0:
+        start_x = shift[0]
+    if shift[1] > 0:
+        start_y = shift[1]
+        
+    shiftIm[start_x:start_x+image.shape[0], start_y:start_y + image.shape[1]] = image[:,:]
+    
+    return shiftIm
+    
+def invert( center, shift):
+    orig = shifted_sphere(512, (0,0), center,  dx =  1e-5/512, radius = 4e-5)
+    shifted = shifted_sphere(512, shift, center,  dx =  1e-5/512, radius = 4e-5)
+    topTopo = subselect(512, shift, shifted, bottom = True)
+    return orig, topTopo, shifted
+  
+def shift4heights( orig_shape, orig_center , shift, dx , radius = 4e-5):
+    '''orig_center - where the bottom sphere is centered
+    shift - how the top sphere is shifted relative to the bottom sphere'''
+    shifted = shifted_sphere(orig_shape, shift, orig_center,  dx, radius = radius)
+    topTopo = subselect(orig_shape, shift, shifted)
+    botTopo = subselect(orig_shape, (-shift[0],-shift[1]), shifted)
+    return topTopo, botTopo, shifted
+
+def shiftByCenters( orig_shape, top_center, bot_center, dx, radius = 4e-5):
+    shift = (bot_center[0]-top_center[0], bot_center[1]-top_center[1])
+    return shift4heights(orig_shape, bot_center, shift, dx, radius = radius), shift

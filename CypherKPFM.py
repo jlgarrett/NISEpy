@@ -326,31 +326,44 @@ def clean_kpfms( ibw, setpoint = 0, tolerance = 0, consistencyTolerance = 0):
     return KPFM_best
     
     
-def flatten( image, axis = 0, mask = '0', order = 0):
+def flatten( image, axis = 0, mask = 1, order = 0):
     '''Flattens the individual lines of an image.
 
     Right now it supports only 0th order flattening, which is most common
     for KPFM image analysis. The option 'axis' permits one to change the 
     direction of the flattening'''
     #transpose for other axis    
-    if axis == 1:
-        image = image.transpose()
     
     
     flattened_image = np.array(image)
     flattening = np.array(image)
     
     try:
-        flattening[mask] = np.nan
-    except IndexError:
-        print('no mask')
+        if mask == 1:
+          mask = np.ones(image.shape, dtype = bool)
+        print('null mask')
+        print('mask is {}'.format(mask))
+    except ValueError:
+      print('using mask')
+
+    if axis == 1:
+        image = image.transpose()
+        mask = mask.transpose()
         
     #we create another value to act on    
 
     for i in range(image.shape[0]):
-        pfit = np.polyfit(np.indices(flattened_image[:,i].shape).flatten(),flattened_image[:,i], order)
-        p = np.poly1d(pfit)
-        flattened_image[:,i]=flattened_image[:,i]-p(np.indices(flattened_image[:,i].shape))
+        ysCut = flattened_image[:,i]
+        locmask = mask[:,i]
+        xsCut = np.indices(ysCut.shape).flatten()[locmask]
+        ysCut = ysCut[locmask]
+        #print(xsCut, ysCut)
+        
+        #pfit = np.polyfit(np.indices(flattened_image[:,i].shape).flatten(),flattened_image[:,i], order)
+        if len(xsCut) > order:
+          pfit = np.polyfit(xsCut, ysCut, order)
+          p = np.poly1d(pfit)
+          flattened_image[:,i]=flattened_image[:,i]-p(np.indices(flattened_image[:,i].shape))
         
     #transpose back    
     if axis == 1:
