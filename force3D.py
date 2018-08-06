@@ -5,7 +5,7 @@ Created on Tue Jan 23 10:08:32 2018
 @author: joe
 """
 import numpy as np
-import tables
+import tables as tb
 from scipy import constants
 import patchpotentials as pt
 
@@ -218,7 +218,7 @@ def df_from_heights(sphere_image, dx, v1, v1_tilde, v1_hat, v2, v2_tilde, v2_hat
     force2sum = constants.epsilon_0*((v1+app_voltage)*(v1_tilde+app_voltage)- \
                                        (v1+app_voltage)*v2_hat - v2*(v1_hat+app_voltage) + v2*v2_tilde)*area2sum
     total_force = np.sum(force2sum) + \
-        constants.epsilon_0/2*(ext_voltage+app_voltage)**2*(spherePFAdF - np.sum(area2sum))
+        constants.epsilon_0/2*(ext_voltage+app_voltage)**2*(spherePFAdF(d, radius) - np.sum(area2sum))
     
     return total_force
   
@@ -252,6 +252,7 @@ def quickforcesave(fileName, pixels, dataList, description = '' ):
   
 def calcForceData( sphere, plate, grid, seps):
     all_data = {}
+    l = len(seps)
     if not sphere.KPFM.shape == plate.KPFM.shape:
         print('The sphere and plate images (currently) need to be the same size')
         return -1
@@ -260,15 +261,15 @@ def calcForceData( sphere, plate, grid, seps):
         all_v0s = {}
         for u,i in enumerate(grid):
             for w, j in enumerate(grid):
+                print(i, j)
                 labelstr  = 's'+str(u).zfill(2) + 'p' + str(w).zfill(2)
-                labels[L*u+w] = labelstr
                 
-                (toptopo, bottopo, wholesphere), shift = shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
+                (toptopo, bottopo, wholesphere), shift = pt.shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
                 vPkpfm = pt.shiftFill(shift, plate.KPFM, bottom = True)
                 vSkpfm = pt.shiftFill(shift, sphere.KPFM)
         
-                v0s = np.zeros(10)
-                forces = np.zeros(10)
+                v0s = np.zeros(l)
+                forces = np.zeros(l)
                 for v, h in enumerate(seps):
                     vSs1 = pt.patches_on_sphere2(toptopo + h, sphere.fs)
                     vSo1 = pt.patches_on_sphere2(toptopo + h, sphere.fo)
@@ -297,14 +298,13 @@ def calcForceData( sphere, plate, grid, seps):
         for u,i in enumerate(grid):
             for w, j in enumerate(grid):
                 labelstr  = 's'+str(u).zfill(2) + 'p' + str(w).zfill(2)
-                labels[L*u+w] = labelstr
                 
-                (toptopo, bottopo, wholesphere), shift = shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
+                (toptopo, bottopo, wholesphere), shift = pt.shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
                 vPkpfm = pt.shiftFill(shift, plate.KPFM, bottom = True)
                 vSkpfm = pt.shiftFill(shift, sphere.KPFM)
         
-                v0s = np.zeros(10)
-                forces = np.zeros(10)
+                v0s = np.zeros(l)
+                forces = np.zeros(l)
                 for v, h in enumerate(seps):
                     vSs1 = pt.patches_on_sphere2(toptopo + h, sphere.fds)
                     vSo1 = pt.patches_on_sphere2(toptopo + h, sphere.fdo)
@@ -325,7 +325,7 @@ def calcForceData( sphere, plate, grid, seps):
     all_df['Title'] = 'The force derivatives calculated form the sphere ' + sphere.name
     all_v0df['Title'] = 'The force derivative-minimizing voltages calculated form the sphere ' + sphere.name
     all_data['df'] = all_df
-    all_data['v0f'] = all_v0df
+    all_data['v0df'] = all_v0df
         
     return all_data
     
@@ -366,19 +366,19 @@ class sphere(surface):
         self.name = name
         
 def to_dictionaries( h5):
-  with tb.open_file(h5, mode = 'r') as h5fil:
-    separations = h5fil.root.separations.read()
-    try:
-        mo = h5fil.root.fo.read()
-        ms = h5fil.root.fs.read()
-    except Exception:
-        mo = h5fil.root.fdo.read()
-        ms = h5fil.root.fds.read()
+    with tb.open_file(h5, mode = 'r') as h5fil:
+        separations = h5fil.root.separations.read()
+        try:
+            mo = h5fil.root.fo.read()
+            ms = h5fil.root.fs.read()
+        except Exception:
+            mo = h5fil.root.fdo.read()
+            ms = h5fil.root.fds.read()
         
-    o = {}    
-    s = {}    
-    for i, x in enumerate(separations):
-        o[x] = mo[:,:,i]
-        s[x] = ms[:,:,i]
+        o = {}    
+        s = {}    
+        for i, x in enumerate(separations):
+            o[x] = mo[:,:,i]
+            s[x] = ms[:,:,i]
    
     return s, o  
