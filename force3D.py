@@ -257,11 +257,13 @@ def quickforcesave(fileName, pixels, dataList, description = '' ):
 def calcForceData( sphere, plate, grid, seps, justOne = False):
     all_data = {}
     l = len(seps)
+
     
     if justOne:
         grid2 = [grid[0]]
     else:
         grid2 = grid
+
     if not sphere.KPFM.shape == plate.KPFM.shape:
         print('The sphere and plate images (currently) need to be the same size')
         return -1
@@ -296,10 +298,10 @@ def calcForceData( sphere, plate, grid, seps, justOne = False):
             
                 all_forces[labelstr] = forces
                 all_v0s[labelstr] = v0s
-    all_forces['Title'] = 'The forces calculated form the sphere ' + sphere.name
-    all_v0s['Title'] = 'The force-minimizing voltages calculated form the sphere ' + sphere.name
-    all_data['f'] = all_forces
-    all_data['v0f'] = all_v0s
+        all_forces['Title'] = 'The forces calculated form the sphere ' + sphere.name
+        all_v0s['Title'] = 'The force-minimizing voltages calculated form the sphere ' + sphere.name
+        all_data['f'] = all_forces
+        all_data['v0f'] = all_v0s
         
     if check(sphere, plate, f = 'fd'):
         all_df = {}
@@ -332,11 +334,11 @@ def calcForceData( sphere, plate, grid, seps, justOne = False):
             
                 all_df[labelstr] = forces
                 all_v0df[labelstr] = v0s
+
         all_df['Title'] = 'The force derivatives calculated form the sphere ' + sphere.name
         all_v0df['Title'] = 'The force derivative-minimizing voltages calculated form the sphere ' + sphere.name
         all_data['df'] = all_df
-        all_data['v0df'] = all_v0df
-        
+        all_data['v0df'] = all_v0df        
     return all_data
     
 def check(sphere, plate, f = 'f'):
