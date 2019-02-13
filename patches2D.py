@@ -297,6 +297,7 @@ def convert_Cr_to_Ck( Crs, dx , L=0):
 def pressure_from_C11(C11, ks, ds):
     '''Converts k-space autocorrelation data into a pressure for separations
     ds, using k values ks'''
+    np.seterr(all = 'ignore')
     e0 = constants.epsilon_0
     klen = len(ks)
     dlen = len(ds)

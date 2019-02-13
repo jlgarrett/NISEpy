@@ -13,10 +13,11 @@ import time
 import force3D as f3
 from scipy import signal
 import mpmath as mp
+import tqdm
 
 '''This file is for calculating the patch filters to process an image. Both
 the actual processing of KPFM data, and the calculation of the force from the 
-images can be found in 'force3D.py'. The function 'completefiltering' creates
+images can be found in 'force3D.py'. The function 'complete_filtering' creates
 the filter, for a given number of pixes, pixel size, heights, when the function
 is specified. It acts using the functions preceding it.'''
 
@@ -43,21 +44,21 @@ def patchIntegrand( label = ""):
     #Return a function based on the input 
     if label == 'fs':
         def intfunc(x, dor):
-            return dor**4 * np.float128(x**3 / (np.sinh(x*dor))**2) * np.float128(scipy.special.j0(x))
+            return scipy.constants.pi/2*dor**4 * np.float128(x**3 / (np.sinh(x*dor))**2) * np.float128(scipy.special.j0(x))
         return intfunc
     elif label == 'fo': 
         def intfunc(x, dor):
-            return dor**4 * x**3 / (np.sinh(x*dor))**2 * np.cosh(x*dor) \
+            return scipy.constants.pi/2*dor**4 * x**3 / (np.sinh(x*dor))**2 * np.cosh(x*dor) \
             * scipy.special.j0(x)
         return intfunc
     elif label == 'fds':
         def intfunc(x, dor):
-            return dor**5 * x**4 / (np.sinh(x*dor))**3 * np.cosh(x*dor) \
+            return scipy.constants.pi/2*dor**5 * x**4 / (np.sinh(x*dor))**3 * np.cosh(x*dor) \
             * scipy.special.j0(x)
         return intfunc
     elif label == 'fdo':
         def intfunc(x, dor):
-            return dor**5 * x**4 / (np.sinh(x*dor))**3 * (np.cosh(x*dor)**2 
+            return scipy.constants.pi/4*dor**5 * x**4 / (np.sinh(x*dor))**3 * (np.cosh(x*dor)**2 
             + 1) * scipy.special.j0(x)
         return intfunc
     else:
@@ -291,10 +292,10 @@ def filter_h_pixels(hs, nside, rinterp, dx):
     for k in range(len(hs))]
     locs = [(i-1,j-1) for j in range(1,(nside+3)//2) for i in range(1,j+1)] 
     
-    for i in range(len(hs)):
+    for i in tqdm.tqdm(range(len(hs))):
         rfunc = rinterp.singleh(hs[i])
         locfilt = define_filter(rfunc,nside, dx)
-        print(i)
+        #print(i)
         
         for j in range((nside+1)//2):
             for k in range(j+1):
@@ -360,11 +361,43 @@ def KPFMimagefilter( raw_image, loc_filter):
     filtered_image = signal.convolve2d(raw_image, loc_filter, boundary='fill', fillvalue = med, mode='same') 
     filtered_image = filtered_image + med*resid*np.ones_like(filtered_image)    
     return filtered_image
+
+def racs( tup ):
+    '''Reverse Absolute Coordinate Sort
+    
+    I wrote this function to simply make line 3 of "make_filter" shorter'''
+    absx = abs(tup[0])
+    absy = abs(tup[1])
+    return (min(absx,absy),max(absx,absy))
   
-def allfilteredImages(raw_image, filters, h_values):
+def make_calc_filters(filter_raw):
+    '''Makes the filter from the interpolated filter data'''
+    nside = max([i for i in filter_raw.keys() if type(i) is tuple])[0]
+    #hs = filter_raw['separation']
+    #lf = interpolate_packaging( filter_interp )
+    #print(list(filter_interp.keys()))
+    hfilters = {}
+    for hx, h in tqdm.tqdm(enumerate(filter_raw['separation'])):
+        hfilter = np.array([[filter_raw[racs((j,i))][hx] 
+                 for j in range(-nside, nside+1)] for i in range(-nside, nside+1)])
+        #print(1,np.sum(hfilter))
+        #hfilter = hfilter/np.sum(hfilter)
+        hfilters[h] = hfilter
+    #for i, h in enumerate(filter_raw['separation']):
+    #  hfilter[:,:,i] = hfilter[:,:,i] / np.sum(hfilter[:,:,i])
+      
+    return hfilters  
+  
+def allfilteredImages(raw_image, filters_packed, h_values = 0):
     allfiltered = {}
-    for x, i in enumerate(h_values):
-        allfiltered[i] = KPFMimagefilter(raw_image, filters[x])
+    if h_values == 0:
+        h_values = filters_packed['separation']
+        
+    print(h_values)
+    filters = make_calc_filters(filters_packed)
+    for i, x in enumerate(tqdm.tqdm(h_values)):
+        #print(x)
+        allfiltered[x] = KPFMimagefilter(raw_image, filters[x])
         
     return allfiltered
   

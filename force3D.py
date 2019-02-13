@@ -5,10 +5,10 @@ Created on Tue Jan 23 10:08:32 2018
 @author: joe
 """
 import numpy as np
-import tables
+import tables as tb
 from scipy import constants
 import patchpotentials as pt
-
+import tqdm
 
 def expand_filter( filt ):
     halfside = (filt.shape[0]-1)//2
@@ -22,7 +22,29 @@ def expand_filter( filt ):
     exp_filt[:halfside] = exp_filt[:halfside:-1]
             
     return exp_filt
+
+def expand_from_dict(filt_dict):
+    for i in filt_dict.keys():
+        try:
+            if i[0] > maxi:
+                maxi = i[0]
+        except TypeError:
+            next
     
+    edge = 2*maxi+1
+    to_fill = np.zeros((edge, edge))
+    
+    for i in filt_dict.keys():
+      #print(i,i[0],i[1])
+        try:
+            to_fill[maxi+i[0], maxi+i[1]] = filt_dict[i][0]
+        except TypeError:
+            next  
+            
+    to_fill = expand_filter(to_fill)
+    return to_fill
+    
+  
 class interpolate_packaging:
     def __init__(self, filt):
         #print(start,end)
@@ -40,31 +62,13 @@ def make_filter( h, filter_interp):
     '''Makes the filter from the interpolated filter data'''
     nside = max([i for i in filter_interp.keys() if type(i) is tuple])[0]
     hlog = np.log(h)
-    print(hlog)
+    #print(hlog)
     lf = interpolate_packaging( filter_interp )
     #print(list(filter_interp.keys()))
     hfilter = ([[np.exp(lf.out(racs((i,j)),hlog)) 
                  for j in range(-nside, nside+1)] for i in range(-nside, nside+1)])
     hfilter = hfilter / np.sum(hfilter)
     return hfilter
-  
-def make_calc_filters(filter_raw):
-    '''Makes the filter from the interpolated filter data'''
-    nside = max([i for i in filter_raw.keys() if type(i) is tuple])[0]
-    #hs = filter_raw['separation']
-    #lf = interpolate_packaging( filter_interp )
-    #print(list(filter_interp.keys()))
-    hfilters = {}
-    for hx, h in enumerate(filter_raw['separation']):
-        hfilter = np.array([[filter_raw[racs((j,i))][hx] 
-                 for j in range(-nside, nside+1)] for i in range(-nside, nside+1)])
-        print(1,np.sum(hfilter))
-        #hfilter = hfilter/np.sum(hfilter)
-        hfilters[h] = hfilter
-    #for i, h in enumerate(filter_raw['separation']):
-    #  hfilter[:,:,i] = hfilter[:,:,i] / np.sum(hfilter[:,:,i])
-      
-    return hfilters
 
 def racs( tup ):
     '''Reverse Absolute Coordinate Sort
@@ -134,7 +138,7 @@ def V0_for_force( v1, v1_tilde, sphere_heights, dx, v2 = 0 , v2_hat = 0, R = 4e-
   
 def spherePFA( d, R ):
     #I've set it up to use the full rather than the leading-order PFA in order to better incorporate the image
-    #The full PFA actually is no better at predicting the exact 
+    #The full PFA actually is no better at predicting the exact solution than the partial PFA
     PFA = 2*np.pi*(R/d-np.log(R/d +1))
     return PFA
   
@@ -218,7 +222,7 @@ def df_from_heights(sphere_image, dx, v1, v1_tilde, v1_hat, v2, v2_tilde, v2_hat
     force2sum = constants.epsilon_0*((v1+app_voltage)*(v1_tilde+app_voltage)- \
                                        (v1+app_voltage)*v2_hat - v2*(v1_hat+app_voltage) + v2*v2_tilde)*area2sum
     total_force = np.sum(force2sum) + \
-        constants.epsilon_0/2*(ext_voltage+app_voltage)**2*(spherePFAdF - np.sum(area2sum))
+        constants.epsilon_0/2*(ext_voltage+app_voltage)**2*(spherePFAdF(d, radius) - np.sum(area2sum))
     
     return total_force
   
@@ -250,25 +254,31 @@ def quickforcesave(fileName, pixels, dataList, description = '' ):
             newtable.flush()
     return 0
   
-def calcForceData( sphere, plate, grid, seps):
+def calcForceData( sphere, plate, grid, seps, justOne = False):
     all_data = {}
+    l = len(seps)
+    
+    if justOne:
+        grid2 = [grid[0]]
+    else:
+        grid2 = grid
     if not sphere.KPFM.shape == plate.KPFM.shape:
         print('The sphere and plate images (currently) need to be the same size')
         return -1
     if check(sphere, plate):
         all_forces = {}
         all_v0s = {}
-        for u,i in enumerate(grid):
-            for w, j in enumerate(grid):
+        print('forces')
+        for u,i in enumerate(grid2):
+            for w, j in tqdm.tqdm(enumerate(grid)):
                 labelstr  = 's'+str(u).zfill(2) + 'p' + str(w).zfill(2)
-                labels[L*u+w] = labelstr
                 
-                (toptopo, bottopo, wholesphere), shift = shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
+                (toptopo, bottopo, wholesphere), shift = pt.shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
                 vPkpfm = pt.shiftFill(shift, plate.KPFM, bottom = True)
                 vSkpfm = pt.shiftFill(shift, sphere.KPFM)
         
-                v0s = np.zeros(10)
-                forces = np.zeros(10)
+                v0s = np.zeros(l)
+                forces = np.zeros(l)
                 for v, h in enumerate(seps):
                     vSs1 = pt.patches_on_sphere2(toptopo + h, sphere.fs)
                     vSo1 = pt.patches_on_sphere2(toptopo + h, sphere.fo)
@@ -294,17 +304,17 @@ def calcForceData( sphere, plate, grid, seps):
     if check(sphere, plate, f = 'fd'):
         all_df = {}
         all_v0df = {}
-        for u,i in enumerate(grid):
-            for w, j in enumerate(grid):
+        print('force gradients')
+        for u,i in enumerate(grid2):
+            for w, j in tqdm.tqdm(enumerate(grid)):
                 labelstr  = 's'+str(u).zfill(2) + 'p' + str(w).zfill(2)
-                labels[L*u+w] = labelstr
                 
-                (toptopo, bottopo, wholesphere), shift = shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
+                (toptopo, bottopo, wholesphere), shift = pt.shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
                 vPkpfm = pt.shiftFill(shift, plate.KPFM, bottom = True)
                 vSkpfm = pt.shiftFill(shift, sphere.KPFM)
         
-                v0s = np.zeros(10)
-                forces = np.zeros(10)
+                v0s = np.zeros(l)
+                forces = np.zeros(l)
                 for v, h in enumerate(seps):
                     vSs1 = pt.patches_on_sphere2(toptopo + h, sphere.fds)
                     vSo1 = pt.patches_on_sphere2(toptopo + h, sphere.fdo)
@@ -322,10 +332,10 @@ def calcForceData( sphere, plate, grid, seps):
             
                 all_df[labelstr] = forces
                 all_v0df[labelstr] = v0s
-    all_df['Title'] = 'The force derivatives calculated form the sphere ' + sphere.name
-    all_v0df['Title'] = 'The force derivative-minimizing voltages calculated form the sphere ' + sphere.name
-    all_data['df'] = all_df
-    all_data['v0f'] = all_v0df
+        all_df['Title'] = 'The force derivatives calculated form the sphere ' + sphere.name
+        all_v0df['Title'] = 'The force derivative-minimizing voltages calculated form the sphere ' + sphere.name
+        all_data['df'] = all_df
+        all_data['v0df'] = all_v0df
         
     return all_data
     
@@ -366,19 +376,31 @@ class sphere(surface):
         self.name = name
         
 def to_dictionaries( h5):
-  with tb.open_file(h5, mode = 'r') as h5fil:
-    separations = h5fil.root.separations.read()
-    try:
-        mo = h5fil.root.fo.read()
-        ms = h5fil.root.fs.read()
-    except Exception:
-        mo = h5fil.root.fdo.read()
-        ms = h5fil.root.fds.read()
+    with tb.open_file(h5, mode = 'r') as h5fil:
+        separations = h5fil.root.separations.read()
+        try:
+            mo = h5fil.root.fo.read()
+            ms = h5fil.root.fs.read()
+        except Exception:
+            mo = h5fil.root.fdo.read()
+            ms = h5fil.root.fds.read()
         
-    o = {}    
-    s = {}    
-    for i, x in enumerate(separations):
-        o[x] = mo[:,:,i]
-        s[x] = ms[:,:,i]
+        o = {}    
+        s = {}    
+        for i, x in enumerate(separations):
+            o[x] = mo[:,:,i]
+            s[x] = ms[:,:,i]
    
     return s, o  
+  
+def self_force_filt_interp_plates(v1, ds, filt_interpolated):
+    force = np.zeros(len(ds))
+    badforce = np.zeros(len(ds))
+    #starttime = time.time()
+    for i in range(len(ds)):
+        #print(time.time()-starttime)
+        filt_d = make_filter(ds[i],ffilt_int)
+        force[i] = force_with_filter(v1, ds[i], filt_d)
+        badforce[i] = ES_force_1term(v1, v1, ds[i])
+        
+    return force, badforce

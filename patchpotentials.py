@@ -29,13 +29,6 @@ from scipy.integrate import dblquad
 #so that we do not lose access to any of the data contained therin
 #these first few functions are written to clear up the 
 
-
-
-
-
-
-
-
 def ES_force(v1,v2,d):
     #constants.epsilon_0
     try:

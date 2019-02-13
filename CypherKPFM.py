@@ -204,7 +204,7 @@ def clean_kpfms( ibw, setpoint = 0, tolerance = 0, consistencyTolerance = 0):
     
     It is necessary to have UserIn2 data, as well as UserIn1 data'''
     
-    print(ibw['cleanlabels'])    
+    #print(ibw['cleanlabels'])    
     
     #First, check to see if we have all the necessary data
     avg_present = 'Averaged_KPFM' in ibw['cleanlabels']
@@ -288,9 +288,8 @@ def clean_kpfms( ibw, setpoint = 0, tolerance = 0, consistencyTolerance = 0):
     #data we bad in both the trace and retrace channels    
     #KPFM_bounded = np.pad(KPFM_out,1, mode= 'median')
     nanout = []
-    print(('nans length is {}, but {} were '
-           'passed, {} in trace, {} in retrace').format(len(nans),
-                    count,countt, countr))
+    print(('nans: {}, trace: {}, retrace: {}, both: {}').format(len(nans),
+                    countt, countr, count))
     count = 0
     while (np.sum(np.isnan(KPFM_best))) > 0 & (count < 10):
         for i in nans:
@@ -316,14 +315,14 @@ def clean_kpfms( ibw, setpoint = 0, tolerance = 0, consistencyTolerance = 0):
     #print(nanout)
     
     #one more median filter cleans the image up a little bit more    
-    KPFM_out = signal.medfilt2d(flatten(KPFM_best),5)
+    KPFM_out = signal.medfilt2d(flatten(KPFM_best),3)
     
     #flattening helps eliminate line noise
     KPFM_out = flatten(KPFM_out)
     
     #Add the image to the ibw
-    add_image( ibw, KPFM_best ,'Cleaned_KPFM')
-    return KPFM_best
+    add_image( ibw, KPFM_out ,'Cleaned_KPFM')
+    return KPFM_out
     
     
 def flatten( image, axis = 0, mask = 1, order = 0):
@@ -341,8 +340,8 @@ def flatten( image, axis = 0, mask = 1, order = 0):
     try:
         if mask == 1:
           mask = np.ones(image.shape, dtype = bool)
-        print('null mask')
-        print('mask is {}'.format(mask))
+        #print('null mask')
+        #print('mask is {}'.format(mask))
     except ValueError:
       print('using mask')
 
