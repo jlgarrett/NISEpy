@@ -308,3 +308,18 @@ def pressure_from_C11(C11, ks, ds):
         pressures[i] = e0/(4*np.pi)*np.trapz(p2sum, ks)
         
     return pressures
+  
+def dpressure_from_C11(C11, ks, ds):
+    '''Converts k-space autocorrelation data into a pressure for separations
+    ds, using k values ks'''
+    np.seterr(all = 'ignore')
+    e0 = constants.epsilon_0
+    klen = len(ks)
+    dlen = len(ds)
+    pressures = np.zeros(dlen)
+    
+    for i in range(dlen):
+        p2sum = [C11[j]*ks[j]**4/np.sinh(ks[j]*ds[i])**3*np.cosh(ks[i]*ds[i]) for j in range(klen)]
+        pressures[i] = e0/(2*np.pi)*np.trapz(p2sum, ks)
+        
+    return pressures
