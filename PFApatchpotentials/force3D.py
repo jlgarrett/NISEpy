@@ -299,7 +299,9 @@ def calcForceData( sphere, plate, grid, seps, justOne = False):
                 all_forces[labelstr] = forces
                 all_v0s[labelstr] = v0s
         all_forces['Title'] = 'The forces calculated form the sphere ' + sphere.name
+        #all_forces['separations'] = seps#
         all_v0s['Title'] = 'The force-minimizing voltages calculated form the sphere ' + sphere.name
+        #all_v0s['separations'] = seps#
         all_data['f'] = all_forces
         all_data['v0f'] = all_v0s
         
@@ -336,8 +338,11 @@ def calcForceData( sphere, plate, grid, seps, justOne = False):
                 all_v0df[labelstr] = v0s
 
         all_df['Title'] = 'The force derivatives calculated form the sphere ' + sphere.name
+        #all_df['separations'] = seps#
         all_v0df['Title'] = 'The force derivative-minimizing voltages calculated form the sphere ' + sphere.name
+        #all_v0df['separations'] = seps#
         all_data['df'] = all_df
+        
         all_data['v0df'] = all_v0df        
     return all_data
     
@@ -406,3 +411,45 @@ def self_force_filt_interp_plates(v1, ds, filt_interpolated):
         badforce[i] = ES_force_1term(v1, v1, ds[i])
         
     return force, badforce
+
+  
+def fullforcesave(fileName, pixels, dataList, separations, description = '' ):
+  '''Save all the data the fancy way
+  
+  filename - name of file to save to
+  pixels - pixel locations at which forces were calculated 
+  dataList - list of all the forces calculated
+  separations - separarations at which the calculations were run
+  description - add a description of the data you are saving'''
+  
+  with tb.open_file(fileName, mode = 'w', title = description) as h5file:
+    pix = np.array([[i[0],i[1]] for i in pixels])
+    parray = h5file.create_array('/', 'center_pix', pix, 'the pixels on which sphere is centered')
+    parray.attrs.plotting_note = 'remember x and y coordinates are switched when plotting on an image'
+    sep_array = h5file.create_array('/', 'separations', separations, 'the separations at which the data are calculated')
+        
+    dgroup = h5file.create_group(h5file.root, 'calcData', 'numerical data calculated from measurements at each separation')
+        
+    for i in dataList:
+      lgroup = h5file.create_group(dgroup, i, 'numerical data for ' + i)
+      for j in dataList[i]:
+        if j == 'Title':
+          Title = dataList[i][j]
+          continue
+        if j == 'separations':
+          continue
+                
+        new_array = h5file.create_array(lgroup, j, dataList[i][j], '')
+        
+  return 0
+  
+def h5_to_dictionaries( h5):
+  '''opens an hdf5 file stored in the form of "fullforcesave()" and converts it back to the form of the
+  dictionaries from which it was saved'''
+  with tb.open_file(h5, mode = 'r') as h5fil:
+    out = {'f':{}, 'df':{}, 'v0f':{}, 'v0df':{}}
+    for j in out.keys():
+      for i in full_force.walk_nodes('/calcData/'+j,'Array'):
+         out[j][i.name] = i.read()
+                
+  return out

@@ -14,6 +14,7 @@ import force3D as f3
 from scipy import signal
 import mpmath as mp
 import tqdm
+import tables
 
 '''This file is for calculating the patch filters to process an image. Both
 the actual processing of KPFM data, and the calculation of the force from the 
@@ -319,7 +320,7 @@ def complete_filtering(hs, nside, rlabel, dx):
     
 def expand_filter( filt ):
     halfside = (filt.shape[0]-1)//2
-    print(halfside)
+    #print(halfside)
     exp_filt = filt
     for i in range(halfside, 2*halfside+1):
         for j in range(halfside,i):
@@ -393,7 +394,7 @@ def allfilteredImages(raw_image, filters_packed, h_values = 0):
     if h_values == 0:
         h_values = filters_packed['separation']
         
-    print(h_values)
+    #print(h_values)
     filters = make_calc_filters(filters_packed)
     for i, x in enumerate(tqdm.tqdm(h_values)):
         #print(x)
@@ -404,7 +405,7 @@ def allfilteredImages(raw_image, filters_packed, h_values = 0):
 def thePhiller( submatrix ):
     a = len(submatrix)-1
     nside = 2*a + 1
-    print(a,nside)
+    #print(a,nside)
     array2fill = np.zeros((nside, nside))
     array2fill[a:,a:] = submatrix[:,:]
     array2fill[0:a,0:a] = submatrix[a:0:-1,a:0:-1]
@@ -412,3 +413,52 @@ def thePhiller( submatrix ):
     array2fill[a:,0:a] = submatrix[:,a:0:-1]
     
     return array2fill
+  
+def savePix( pixels, filename, title = 'Image potential filters' ):
+    h5file = tables.open_file(filename, mode='w', title = title)
+    try:
+        for x, i in enumerate(pixels):
+            if x == 1:
+                heights = h5file.create_array('/','separations',
+                    pixels[i]['separation'], title = 'heights at which the filters are calculated')
+            
+            locfilter = f3.make_calc_filters(pixels[i])
+            H = len(locfilter.keys())
+            L = len(locfilter[list(locfilter.keys())[0]])//2 + 1
+            arrays = np.zeros((L,L,H))
+            for y, j in enumerate(np.sort(list(locfilter.keys()))):
+                arrays[:,:,y] = locfilter[j][(L-1):,(L-1):]
+          
+            print(type(arrays))
+            h5file.create_array('/', i, arrays, title = 'filter {}'.format(i))
+    except Exception as e:
+        print(e)
+        print('att error')
+        
+    h5file.close()
+    
+def saveFilteredImages( filename, data, title = 0):
+    if title == 0:
+        title = ''
+    with tables.open_file(filename, mode = 'w', title = title) as testfile:
+        H = len(data['separations'])
+        try:
+            L = len(data['fs'][list(data['fs'].keys())[0]])
+        except KeyError:
+            L = len(data['fds'][list(data['fds'].keys())[0]])
+            
+        arrays = np.zeros((L,L,H))
+    
+        for j, k in enumerate(data):
+            print('saving '+k)
+            if k == 'separations':
+                testfile.create_array('/', 'separations', data['separations'],
+                    title = 'Separations at which KFM images were used\
+                                      to calculate transformed potentials')
+                continue
+            if k == 'surfaceKPFM':
+                testfile.create_array('/', 'surfaceKPFM', data[k], title = 'surface potential')
+                continue
+            for i, h in enumerate(data['separations']):
+                arrays[:,:,i] = data[k][h]
+            testfile.create_array('/', k, arrays, title = k + '-transformed voltage image')
