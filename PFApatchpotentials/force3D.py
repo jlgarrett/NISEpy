@@ -145,14 +145,15 @@ def spherePFA( d, R ):
 def spherePFAdF( d, R ):
     #I've set it up to use the full rather than the leading-order PFA in order to better incorporate the image
     #The full PFA actually is no better at predicting the exact 
-    PFA = 2*np.pi*R/d**2*(1-1/(R/d +1))
+    PFA = np.pi*R/d**2*(1-1/(R/d +1))
     return PFA
   
 def minimizing_voltage_fd_image( voltage_map, heights , dx,  inner = False):
     '''calculates the minimizing voltage'''
     
-    v0_unnorm = 2*0.5*np.sum(voltage_map/heights**3)*dx**2
-    v0_normalizer = 2*np.sum(1/heights**3)*dx**2
+    
+    v0_unnorm = 0.5*np.sum(voltage_map/heights**3)*dx**2###2
+    v0_normalizer = np.sum(1/heights**3)*dx**2###2
     #print(v0_unnorm,v0_normalizer)
     
     if inner:
@@ -215,14 +216,19 @@ def force_expanded( sphere_image, dx, v1, v1_tilde, v1_hat, v2, v2_tilde, v2_hat
     return force2sum, residual_force
   
 def df_from_heights(sphere_image, dx, v1, v1_tilde, v1_hat, v2, v2_tilde, v2_hat,\
-                      ext_voltage = 0, app_voltage = 0, radius = 4e-5):
+                      ext_voltage = 0, app_voltage = 0, radius = 4e-5, wsph = 1, return_areasum = 0 ):
     
     d = np.amin(sphere_image)
-    area2sum = 1/sphere_image**3*dx**2
+    area2sum = 1/sphere_image**3*dx**2 #2*np.pi*R/d**2*(1-1/(R/d +1)) so there must be division by two to cancel the two in front
     force2sum = constants.epsilon_0*((v1+app_voltage)*(v1_tilde+app_voltage)- \
                                        (v1+app_voltage)*v2_hat - v2*(v1_hat+app_voltage) + v2*v2_tilde)*area2sum
-    total_force = np.sum(force2sum) + \
-        constants.epsilon_0/2*(ext_voltage+app_voltage)**2*(spherePFAdF(d, radius) - np.sum(area2sum))
+    total_force = np.sum(force2sum) 
+    if wsph:
+      total_force += constants.epsilon_0*(ext_voltage+app_voltage)**2*(spherePFAdF(d, radius) - np.sum(area2sum))####
+    
+    
+    if return_areasum == 1:
+      return np.sum(area2sum)
     
     return total_force
   
@@ -254,7 +260,7 @@ def quickforcesave(fileName, pixels, dataList, description = '' ):
             newtable.flush()
     return 0
   
-def calcForceData( sphere, plate, grid, seps, justOne = False):
+def calcForceData( sphere, plate, grid, seps, justOne = False, extpot = 0, vset = np.nan, wsph = 1, ras = 0):
     all_data = {}
     l = len(seps)
 
@@ -275,7 +281,8 @@ def calcForceData( sphere, plate, grid, seps, justOne = False):
             for w, j in tqdm.tqdm(enumerate(grid)):
                 labelstr  = 's'+str(u).zfill(2) + 'p' + str(w).zfill(2)
                 
-                (toptopo, bottopo, wholesphere), shift = pt.shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
+                (toptopo, bottopo, wholesphere), shift = pt.shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx, 
+                                                                          radius = sphere.R)
                 vPkpfm = pt.shiftFill(shift, plate.KPFM, bottom = True)
                 vSkpfm = pt.shiftFill(shift, sphere.KPFM)
         
@@ -291,9 +298,12 @@ def calcForceData( sphere, plate, grid, seps, justOne = False):
                     vSs = pt.shiftFill( shift, vSs1)
                     vSo = pt.shiftFill( shift, vSo1)
                     v0 = V0_for_force(vSkpfm, vSs, wholesphere+h, dx=sphere.dx, v2 = vPkpfm, v2_hat = vPo, R = sphere.R)
-                    force = force_from_heights( wholesphere+h, sphere.dx, vSkpfm, vSs, vSo, vPkpfm, vPs, vPo,
-                      ext_voltage = 0, app_voltage = v0, radius = sphere.R)
                     v0s[v] = v0
+                    if not np.isnan(vset):
+                      v0 = vset
+                    force = force_from_heights( wholesphere+h, sphere.dx, vSkpfm, vSs, vSo, vPkpfm, vPs, vPo,
+                      ext_voltage = extpot, app_voltage = v0, radius = sphere.R)
+                    
                     forces[v] = force
             
                 all_forces[labelstr] = forces
@@ -313,7 +323,8 @@ def calcForceData( sphere, plate, grid, seps, justOne = False):
             for w, j in tqdm.tqdm(enumerate(grid)):
                 labelstr  = 's'+str(u).zfill(2) + 'p' + str(w).zfill(2)
                 
-                (toptopo, bottopo, wholesphere), shift = pt.shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx)
+                (toptopo, bottopo, wholesphere), shift = pt.shiftByCenters(sphere.KPFM.shape, i, j, sphere.dx,
+                                                                          radius = sphere.R)
                 vPkpfm = pt.shiftFill(shift, plate.KPFM, bottom = True)
                 vSkpfm = pt.shiftFill(shift, sphere.KPFM)
         
@@ -329,9 +340,11 @@ def calcForceData( sphere, plate, grid, seps, justOne = False):
                     vSs = pt.shiftFill( shift, vSs1)
                     vSo = pt.shiftFill( shift, vSo1)
                     v0 = V0_for_df(vSkpfm, vSs, wholesphere+h, dx=sphere.dx, v2 = vPkpfm, v2_hat = vPo, R = sphere.R)
-                    force = df_from_heights( wholesphere+h, sphere.dx, vSkpfm, vSs, vSo, vPkpfm, vPs, vPo,
-                      ext_voltage = 0, app_voltage = v0, radius = sphere.R)
                     v0s[v] = v0
+                    if not np.isnan(vset):
+                      v0 = vset
+                    force = df_from_heights( wholesphere+h, sphere.dx, vSkpfm, vSs, vSo, vPkpfm, vPs, vPo,
+                      ext_voltage = extpot, app_voltage = v0, radius = sphere.R, wsph = wsph, return_areasum = ras)
                     forces[v] = force
             
                 all_df[labelstr] = forces
@@ -449,7 +462,7 @@ def h5_to_dictionaries( h5):
   with tb.open_file(h5, mode = 'r') as h5fil:
     out = {'f':{}, 'df':{}, 'v0f':{}, 'v0df':{}}
     for j in out.keys():
-      for i in full_force.walk_nodes('/calcData/'+j,'Array'):
+      for i in h5fil.walk_nodes('/calcData/'+j,'Array'):
          out[j][i.name] = i.read()
                 
   return out
