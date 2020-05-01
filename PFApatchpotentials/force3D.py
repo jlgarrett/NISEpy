@@ -7,7 +7,10 @@ Created on Tue Jan 23 10:08:32 2018
 import numpy as np
 import tables as tb
 from scipy import constants
-import patchpotentials as pt
+try:
+  import patchpotentials as pt
+except ModuleNotFoundError:
+  import PFApatchpotentials.patchpotentials as pt
 import tqdm
 
 def expand_filter( filt ):
@@ -395,16 +398,21 @@ class sphere(surface):
         self.dx = dx
         self.name = name
         
-def to_dictionaries( h5):
+def to_dictionaries( h5, d=0):
     with tb.open_file(h5, mode = 'r') as h5fil:
         separations = h5fil.root.separations.read()
-        try:
-            mo = h5fil.root.fo.read()
-            ms = h5fil.root.fs.read()
-        except Exception:
+        if d==0:
+            try:
+                mo = h5fil.root.fo.read()
+                ms = h5fil.root.fs.read()
+            except Exception:
+                mo = h5fil.root.fdo.read()
+                ms = h5fil.root.fds.read()
+        else:
             mo = h5fil.root.fdo.read()
             ms = h5fil.root.fds.read()
-        
+
+            
         o = {}    
         s = {}    
         for i, x in enumerate(separations):
