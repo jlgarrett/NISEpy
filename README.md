@@ -15,15 +15,22 @@ Although the code in this repository is quite old, dating back to 2017-2018, and
 ## About the repository
 
 The repository is divided into several .py files:
+
 CypherKPFM.py - code to import raw data from the Cypher AFM, when a particular setup is used for KPFM. It is included so that the example data can be imported. 
+
 filters3D.py - functions to create the filtered versions of the patch potentials
+
 force3D.py - functions and classes to calculate the force in 3D geometries once the filtered patch potentials are created
+
 patches2D.py - contains the code to calculate the patch force in the original *k*-space formulation
+
 patchpotentials.py - includes functions for generating the sphere and calculating the force from pre-filtered images for a generic height map. The functions is this are mostly more simple/less general than those found in the other .py files. Also, they are used in the other functions. 
+
 patchPotentials_testing.py - contains a function for creating simulated data for testing. I didn't really use it
+
 preprocessing.py - a script for automatically calculating the force from a particular set of images. I recommend not using this, because it is difficult to interpret
-ResolutionDetermination.py
-SavingDict.py
+
+SavingDict.py - used for saving files
 
 ## How to use the code
 
