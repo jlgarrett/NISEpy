@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
-setup(name='PFApatchpotentials',
-      version='0.1',
+setup(name='NISEpy',
+      version='1.0',
       description='a library to enable the quick calculation of patch potential forces on curved surfaces from (KPFM) images of the surface potential',
       url='https://github.com/NTNU-SmallSat-Lab/Imaging-Pipeline',
       author='Joe Garrett',
