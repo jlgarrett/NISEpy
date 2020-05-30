@@ -1,5 +1,8 @@
 # Nanoscale Interactions from Surface Electrostatics in Python
 
+### (pronounced "nice pie")
+
+
 ## Preface
 
 For most electrostatic problems, conductors can be assumed to be at an equipotential across their surface. However, at the nanoscale this is no longer true. One of the consequences is the presence of [an electrostatic force between conductors](https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.90.160403) even if they are at, on average, the same electrostatic potential. This patch force presents itself as an artifact in certain precision measurements, such as measurements of the Casimir force, which was how I got involved. 
