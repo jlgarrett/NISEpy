@@ -13,7 +13,7 @@ Later, I managed to measure the patch potentials on the sphere as well as the pl
 
 Applying the formulae was not straight-forward for a variety of reasons: the kernels involved with the convolution changed with separation (*h*), they were large (at least 81x81), and they required a long time to calculate (about half an hour on a laptop). I wrote the code in this repository as a way of organizing the formulae, and solving them in a straight-forward way. The unfortunate part of this is that, in order to save time, many intermediate steps must be saved, which takes 100s of MB of storage.
 
-Although the code in this repository is quite old, dating back to 2017-2018, and does not adhere at all to the PEP8 standard that I now tend to follow, I think that it is still worth posting. First of all, it was the basis for a paper that will be published soon. Second of all, I hope that it encourages others currently involved in force measurements to calculate the effect of patch potentials in their own setups. My hope is that one of you, dear readers, decides to take up development of this code for your own projects. 
+Although the code in this repository is quite old, dating back to 2017-2018, and does not adhere at all to the PEP8 standard that I now tend to follow, I think that it is still worth posting. First of all, it was the basis for [a paper that was recently published](https://journals.aps.org/prresearch/abstract/10.1103/PhysRevResearch.2.023355). Second of all, I hope that it encourages others currently involved in force measurements to calculate the effect of patch potentials in their own setups. My hope is that one of you, dear readers, decides to take up development of this code for your own projects. 
 
 ## About the repository
 
