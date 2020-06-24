@@ -38,3 +38,11 @@ SavingDict.py - used for saving files
 ## How to use the code
 
 Although the documentation leaves something to be desired (sorry about that), I think that the tutorial (the .ipynb file) is fairly straight-forward to follow. 
+
+## Interesting open topics
+
+The original purpose of this code was to calculate the patch potential force in sphere-plate Casimir force measurements, but I think with a few simple extensions, it could serve some other purposes as well. I'm researching other topics now, so I am happy to list these old ideas that I had, but will not be implementing them myself. 
+
+1. The resolution of Kelvin probe force microscopy. A simple model can be used to derive analytic formulae that predict how the resolution of KPFM will change with scan height, tip oscillation amplitude, tip radius, etc. However, the simple model leaves out the 'blurring' effect that this code accounts for. I think that it would be interesting to see how well the analytic model relates to the full situation. More details can be found in [this supplemental material](https://pubs.acs.org/doi/suppl/10.1021/acsami.8b08097/suppl_file/am8b08097_si_001.pdf). 
+
+2. Many geometries for Casimir force interaction other than the sphere-plate geometry are interesting. I'd be glad to see someone take the initiative to adapt the code to work with those other geometries, such as crossed cylinders. 
